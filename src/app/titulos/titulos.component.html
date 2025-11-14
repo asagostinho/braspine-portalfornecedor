@@ -1,0 +1,83 @@
+  <div class="sample-container">
+    <po-loading-overlay [hidden]="isHideLoading"></po-loading-overlay>
+  </div>
+
+  <po-container class="po-lg-12">
+
+       <form #f="ngForm">
+
+       <div id="filtros" class="po-row">
+        <po-select class="po-md-3 po-lg-3"
+                  name="empresa"
+                  p-label="Empresa"
+                  [p-options]="empresaOptions"
+                  (p-change)="setEmpresa($event)"
+
+        >
+        </po-select>
+
+        <po-select class="po-md-3 po-lg-3"
+                   name="situacao"
+                   p-label="Situação"
+                  [p-options]="situacaoOptions"
+                  (p-change)="setSituacao($event)"
+
+        >
+        </po-select>
+        <po-datepicker
+            #datepicker
+            class="po-md-2 po-lg-2"
+            name="dataIni"
+            p-clean
+            p-label="Data Inicial"
+            p-placeholder="dd/mm/yyyy"
+
+            p-required="true"
+            [(ngModel)]="dataIni"
+
+          >
+          </po-datepicker>
+
+          <po-datepicker
+            class="po-md-2 po-lg-2"
+            name="dataFim"
+            p-clean
+            p-label="Data Final"
+            p-placeholder="dd/mm/yyyy"
+
+            p-required="true"
+            [(ngModel)]="dataFim"
+          >
+
+        </po-datepicker>
+
+        <div  class="po-md-2 po-lg-2">
+
+          <po-button
+              class="po-md-4 po-lg-6"
+              p-label="Buscar"
+              (p-click)="onClick()">
+          </po-button>
+
+          <div class="po-md-6 po-lg-6">
+            <po-button-group  [p-buttons]="botoes"> </po-button-group>
+          </div>
+
+
+
+        </div>
+      </div>
+
+    </form>
+
+      <hr>
+
+
+      <app-tabletitulo
+        [dados]="itens"
+    ></app-tabletitulo>
+
+
+  </po-container>
+
+
