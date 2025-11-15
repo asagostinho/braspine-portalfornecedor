@@ -19,6 +19,9 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TabletituloComponent } from './tabletitulo/tabletitulo.component';
 import { JwtInterceptor } from './common/jwt.interceptor';
 import { ErrorInterceptor } from './common/error.interceptor';
+import { SecurityInterceptor } from './common/security.interceptor';
+import { RecaptchaModule } from 'ng-recaptcha';
+import { LoginComponent } from './login/login.component';
 
 registerLocaleData(ptBr);
 
@@ -27,7 +30,7 @@ registerLocaleData(ptBr);
     AppComponent,
     TitulosComponent,
     TabletituloComponent,
-
+    LoginComponent
   ],
   imports: [
     BrowserModule,
@@ -40,11 +43,13 @@ registerLocaleData(ptBr);
     MatStepperModule,
     MatIconModule,
     FormsModule,
-    ReactiveFormsModule
+    ReactiveFormsModule,
+    RecaptchaModule
   ],
   providers: [
     { provide: LOCALE_ID, useValue: 'pt' }, // configurar local Brasil
     { provide: STEPPER_GLOBAL_OPTIONS, useValue: {displayDefaultIndicatorType: false}, },
+    { provide: HTTP_INTERCEPTORS, useClass: SecurityInterceptor, multi: true },
     { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },
     { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true },
   ],

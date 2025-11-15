@@ -1,38 +1,20 @@
 <po-page-default>
-<div>
+  <!-- Rotas protegidas -->
+  <router-outlet></router-outlet>
+
+  <!-- Fallback: Exibição via *ngIf quando não há rota ativa -->
+  <div *ngIf="router.url === '/' || router.url === ''">
     <div *ngIf="isLogged">
+      <po-toolbar [p-title]="title"></po-toolbar>
+      <app-titulos
+        [cnpj]="cnpj"
+        [maxperiodo]="maxperiodo"
+        [fornecedornome]="fornecedornome">
+      </app-titulos>
+    </div>
 
-      <po-toolbar  [p-title]="title" ></po-toolbar>
-
-    <app-titulos
-      [cnpj]="cnpj"
-      [maxperiodo]= "maxperiodo"
-      [fornecedornome]="fornecedornome">
-    </app-titulos>
-
+    <app-login *ngIf="!isLogged" (loginSuccess)="onLoginSuccess($event)"></app-login>
   </div>
-
-  <po-page-login *ngIf="!isLogged"
-  (p-login-submit)="login($event)"
-   p-product-name="Consulta Documentos de Fornecedor"
-  [p-loading]="loading"
-  [p-languages]="linguageList"
-  [p-literals]="customLiterals"
-  [p-hide-remember-user]="true"
-  p-logo="https://www.braspine.com.br/wp-content/uploads/2023/05/logo_braspine_horizontal_positivo_cor_rgb.png"
-
-  p-login-pattern="^(\d*)$"
-
-  [p-password-errors]="passwordErrors"
-  [p-login-errors]="loginErrors"
-  (p-login-change)="loginChange($event)"
-  (p-password-change)="passwordChange()"
-  [p-recovery]="this.cadastrarSenha.bind(this)"
-  >
-  </po-page-login>
-
-</div>
-
 </po-page-default>
 
 

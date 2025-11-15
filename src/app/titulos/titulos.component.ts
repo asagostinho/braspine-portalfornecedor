@@ -73,9 +73,6 @@ export class TitulosComponent {
         dataI = this.getDataValida(this.dataIni);
         dataF = this.getDataValida(this.dataFim);
 
-        console.log('Data Inicial:', dataI);
-        console.log('Dados alterados:', dataF);
-
         if (dataI.getTime() > dataF.getTime()) {
 
           this.msg.error('Data inicial deve ser menor ou igual a data final');
@@ -86,9 +83,6 @@ export class TitulosComponent {
 
           var periodo = dataF.getTime() - dataI.getTime() ;
           periodo = periodo / (1000 * 60 * 60 * 24)  //converte milesegundos em dias
-
-          console.log('Periodo:', periodo);
-          console.log('MaxDias:', maxdias);
 
           if ( periodo > maxdias){
             this.msg.error(`O Periodo informado execede ao periodo maximo de ${this.maxperiodo.trim()} meses`);

@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
 import { PoMenuItem, PoNotificationService } from '@po-ui/ng-components';
 import { environment } from 'src/environments/environment';
+import { SecurityUtil } from '../utils/security.util';
 
 export interface UserInfo {
   id: string;
@@ -30,25 +31,22 @@ export class LoginService {
     }
 
 
-  login(loginEvent: any) {
-    //const headers = new HttpHeaders().set('tenantID', emp + ',' + filial);
-    let headers = new HttpHeaders().set('tenantID', '02' + ',' + '020101');
-    let params = new HttpParams()
-                          .set('cCNPJraiz', loginEvent.login)
-                          .set('cSenha', loginEvent.password);
-    let httpOptions = {
-      headers: headers,
-      params: params
+  login(loginEvent: any, recaptchaToken?: string) {
+    // Headers com Content-Type para JSON
+    let headers = new HttpHeaders()
+      .set('tenantID', '02' + ',' + '020101')
+      .set('Content-Type', 'application/json');
+
+    // ✅ Dados sensíveis no BODY, não na URL (mais seguro)
+    const body = {
+      cCNPJraiz: loginEvent.login,
+      cSenha: loginEvent.password,
+      recaptchaToken: recaptchaToken || null
     };
 
-    return this.http.post(`${this.domain}${this.endpointlogin }`, null, httpOptions)
-    //não precisa do dominio porque esta usando as configuraçõe de proxy do arquivo proxy.conf.js
-    //return this.http.post(`${this.endpointlogin }`, null, httpOptions)
+    return this.http.post(`${this.domain}${this.endpointlogin}`, body, { headers })
       .pipe(
         catchError((error: any) => {
-          console.error('-------- Login Service Error Diagnosis --------');
-          console.error('Complete error object received:', error);
-          console.error('---------------------------------------------');
 
           let errorMessage = 'Erro na comunicação com o servidor.';
 
@@ -60,17 +58,14 @@ export class LoginService {
                   const parsedError = JSON.parse(error.error);
                   errorMessage = parsedError.message || parsedError.errorMessage || errorMessage;
               } catch (parseError) {
-                  console.error('Failed to parse error.error string:', parseError);
                   errorMessage = error.message || errorMessage;
               }
           }
           else if (error && typeof error.responseText === 'string') {
               try {
-                  console.warn('Workaround: Attempting to parse error.responseText');
                   const parsedError = JSON.parse(error.responseText);
                   errorMessage = parsedError.message || parsedError.errorMessage || errorMessage;
               } catch (parseError) {
-                  console.error('Failed to parse error.responseText string:', parseError);
                   errorMessage = error.message || errorMessage;
               }
           }
@@ -84,22 +79,20 @@ export class LoginService {
   }
 
   cadastrar(raizcnpj: string): Observable<any> {
-    //const headers = new HttpHeaders().set('tenantID', emp + ',' + filial);
-    let headers = new HttpHeaders().set('tenantID', '02' + ',' + '020101');
-    let params = new HttpParams()
-                          .set('cCNPJraiz', raizcnpj);
+    // Headers com Content-Type para JSON
+    let headers = new HttpHeaders()
+      .set('tenantID', '02' + ',' + '020101')
+      .set('Content-Type', 'application/json');
 
-    let httpOptions = {
-      headers: headers,
-      params: params
+    // ✅ Dados no body ao invés de query params
+    const body = {
+      cCNPJraiz: raizcnpj
     };
 
-    return this.http.post(`${this.domain}${this.endpointcadastro}`, null, httpOptions)
-    //return this.http.post(`${this.endpointcadastro}`, null, httpOptions)
+    return this.http.post(`${this.domain}${this.endpointcadastro}`, body, { headers })
       .pipe(
         catchError(error => {
-         // Return an observable with a user-facing error message.
-          return throwError(() => new Error(error.error.errorMessage));
+          return throwError(() => new Error(error.error?.errorMessage || 'Erro ao cadastrar'));
         })
       );
   }

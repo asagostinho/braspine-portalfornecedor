@@ -1,0 +1,29 @@
+<div class="login-container">
+  <po-page-login
+    (p-login-submit)="onLoginSubmit($event)"
+    p-product-name="Consulta Documentos de Fornecedor"
+    [p-loading]="loading"
+    [p-languages]="linguageList"
+    [p-literals]="customLiterals"
+    [p-hide-remember-user]="true"
+    p-logo="https://www.braspine.com.br/wp-content/uploads/2023/05/logo_braspine_horizontal_positivo_cor_rgb.png"
+    p-login-pattern="^(\d*)$"
+    [p-password-errors]="passwordErrors"
+    [p-login-errors]="loginErrors"
+    (p-login-change)="loginChange($event)"
+    (p-password-change)="passwordChange()"
+    [p-recovery]="this.cadastrarSenha.bind(this)">
+  </po-page-login>
+
+  <div class="recaptcha-container">
+    <re-captcha
+      (resolved)="onRecaptchaResolved($event)"
+      (error)="onRecaptchaError($event)"
+      [siteKey]="environment.recaptchaSiteKey"
+      [size]="'normal'"
+      [theme]="'light'"
+      [lang]="'pt-BR'">
+    </re-captcha>
+  </div>
+</div>
+

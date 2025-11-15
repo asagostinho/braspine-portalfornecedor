@@ -44,4 +44,5 @@ Thumbs.db
 # Large files
 *.zip
 
-/zversoes/
+/ZVersoes/
+/ZPrompt/
