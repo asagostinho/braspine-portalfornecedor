@@ -48,7 +48,10 @@ export class TitulosService {
     return this.http.get<any>(`${this.domain}${this.endpoint}`, httpOptions).pipe(
         catchError(error => {
         // Return an observable with a user-facing error message.
-        return throwError(() => new Error(error.error.errorMessage));
+        const errorMessage = error?.error?.fault?.faultstring || 
+                             error?.error?.errorMessage || 
+                             'Erro ao buscar títulos';
+        return throwError(() => new Error(errorMessage));
       })
     );
   }

@@ -40,7 +40,8 @@ export class LoginService {
     // ✅ Dados sensíveis no BODY, não na URL (mais seguro)
     const body = {
       cCNPJraiz: loginEvent.login,
-      cSenha: loginEvent.password,
+      //cSenha: loginEvent.password,
+      cSenha: SecurityUtil.encryptSHA256(loginEvent.password),
       recaptchaToken: recaptchaToken || null
     };
 
@@ -50,13 +51,17 @@ export class LoginService {
 
           let errorMessage = 'Erro na comunicação com o servidor.';
 
-          if (error && error.error && typeof error.error === 'object' && (error.error.message || error.error.errorMessage)) {
+          // Priorizar estrutura fault.faultstring conforme documentação da API
+          if (error?.error?.fault?.faultstring) {
+              errorMessage = error.error.fault.faultstring;
+          }
+          else if (error && error.error && typeof error.error === 'object' && (error.error.message || error.error.errorMessage)) {
               errorMessage = error.error.message || error.error.errorMessage;
           }
           else if (error && error.error && typeof error.error === 'string') {
               try {
                   const parsedError = JSON.parse(error.error);
-                  errorMessage = parsedError.message || parsedError.errorMessage || errorMessage;
+                  errorMessage = parsedError.fault?.faultstring || parsedError.message || parsedError.errorMessage || errorMessage;
               } catch (parseError) {
                   errorMessage = error.message || errorMessage;
               }
@@ -64,7 +69,7 @@ export class LoginService {
           else if (error && typeof error.responseText === 'string') {
               try {
                   const parsedError = JSON.parse(error.responseText);
-                  errorMessage = parsedError.message || parsedError.errorMessage || errorMessage;
+                  errorMessage = parsedError.fault?.faultstring || parsedError.message || parsedError.errorMessage || errorMessage;
               } catch (parseError) {
                   errorMessage = error.message || errorMessage;
               }
@@ -92,7 +97,10 @@ export class LoginService {
     return this.http.post(`${this.domain}${this.endpointcadastro}`, body, { headers })
       .pipe(
         catchError(error => {
-          return throwError(() => new Error(error.error?.errorMessage || 'Erro ao cadastrar'));
+          const errorMessage = error?.error?.fault?.faultstring ||
+                               error?.error?.errorMessage ||
+                               'Erro ao cadastrar';
+          return throwError(() => new Error(errorMessage));
         })
       );
   }

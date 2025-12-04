@@ -20,6 +20,7 @@ import { TabletituloComponent } from './tabletitulo/tabletitulo.component';
 import { JwtInterceptor } from './common/jwt.interceptor';
 import { ErrorInterceptor } from './common/error.interceptor';
 import { SecurityInterceptor } from './common/security.interceptor';
+import { FornecedorTokenInterceptor } from './common/fornecedor-token.interceptor';
 import { RecaptchaModule } from 'ng-recaptcha';
 import { LoginComponent } from './login/login.component';
 
@@ -52,6 +53,7 @@ registerLocaleData(ptBr);
     { provide: HTTP_INTERCEPTORS, useClass: SecurityInterceptor, multi: true },
     { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true },
     { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true },
+    { provide: HTTP_INTERCEPTORS, useClass: FornecedorTokenInterceptor, multi: true },
   ],
   bootstrap: [AppComponent]
 })

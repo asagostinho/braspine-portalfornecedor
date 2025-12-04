@@ -1,3 +1,5 @@
+import * as CryptoJS from 'crypto-js';
+
 /**
  * Utilitário para segurança e ofuscação de dados sensíveis
  */
@@ -87,5 +89,17 @@ export class SecurityUtil {
     return !window.location.hostname.includes('localhost') &&
            !window.location.hostname.includes('127.0.0.1');
   }
+
+  /**
+   * Gera o hash MD5 de uma string
+   */
+  static encryptMD5(value: string): string {
+    return CryptoJS.MD5(value).toString();
+  }
+
+  static encryptSHA256(value: string): string {
+    return CryptoJS.SHA256(value).toString();
+  }
+
 }
 

@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Output, AfterViewInit, ElementRef, Renderer2 } from '@angular/core';
+import { Router } from '@angular/router';
 import { LoginService } from '../services/login.service';
 import { PoLanguage, PoNotificationService, PoDialogService } from '@po-ui/ng-components';
 import { PoPageLoginLiterals } from '@po-ui/ng-templates';
@@ -52,6 +53,7 @@ export class LoginComponent implements AfterViewInit {
     private poDialog: PoDialogService,
     private configService: ConfigService,
     private authenticationService: AuthenticationService,
+    private router: Router,
     private renderer: Renderer2,
     private el: ElementRef
   ) {
@@ -116,6 +118,11 @@ export class LoginComponent implements AfterViewInit {
       .subscribe(
         data => {
           this.loginService.login(formData, recaptchaToken).subscribe((response: any) => {
+            // Armazenar token JWT do fornecedor após login bem-sucedido
+            if (response.token) {
+              localStorage.setItem('fornecedor_jwt', response.token);
+            }
+
             const loginData: LoginSuccessData = {
               cnpj: response.cnpjraiz,
               fornecedornome: response.fornecedornome,
@@ -126,16 +133,19 @@ export class LoginComponent implements AfterViewInit {
             this.recaptchaToken = ''; // Limpa token após login bem-sucedido
             this.msg.success('Login efetuado com sucesso!');
 
-            // Emite evento de sucesso para o componente pai
+            // Emite evento de sucesso para o componente pai (se necessário)
             this.loginSuccess.emit(loginData);
+
+            // Navega para rota protegida após login
+            this.router.navigate(['/titulos']);
           },
             error => {
-              let errorMessage = 'Erro desconhecido ao tentar fazer login.';
-              if (error && error.error && (error.error.message || error.error.errorMessage)) {
-                errorMessage = error.error.message || error.error.errorMessage;
-              } else if (error && error.message) {
-                errorMessage = error.message;
-              }
+              // Priorizar estrutura fault.faultstring conforme documentação da API
+              let errorMessage = error?.error?.fault?.faultstring || 
+                                 error?.error?.message || 
+                                 error?.error?.errorMessage || 
+                                 error?.message || 
+                                 'Erro desconhecido ao tentar fazer login.';
 
               // Tenta corrigir problema de encoding (UTF-8 exibido como Latin-1)
               try {
@@ -165,26 +175,43 @@ export class LoginComponent implements AfterViewInit {
 
     if (this.raizcnpj.trim()) {
       this.loginService.cadastrar(this.raizcnpj).subscribe((response: any) => {
-        this.listemail = response.listemail;
-        this.fornecedornome = response.fornecedornome;
+        // Nova estrutura da API: retorna mensagem única com e-mails mascarados
+        if (response.mensagem) {
+          this.poDialog.alert({
+            ok: () => (this.loading = false),
+            title: 'Cadastro de Senha',
+            message: response.mensagem
+          });
+        } else {
+          // Fallback para estrutura antiga (compatibilidade)
+          this.listemail = response.listemail || [];
+          this.fornecedornome = response.fornecedornome || '';
 
-        this.mensagem = `Senha cadastrada com sucesso para o fornecedor ${this.fornecedornome} `;
-        this.mensagem += "</br> ";
-        this.mensagem += "A senha foi enviado para os seguintes emails : ";
+          this.mensagem = `Senha cadastrada com sucesso para o fornecedor ${this.fornecedornome} `;
+          this.mensagem += "</br> ";
+          this.mensagem += "A senha foi enviado para os seguintes emails : ";
 
-        this.listemail.forEach(item => {
-          this.mensagem += `</br>&nbsp;&nbsp;&nbsp;&nbsp; ${item.email.toLowerCase()}`;
-        });
+          this.listemail.forEach(item => {
+            this.mensagem += `</br>&nbsp;&nbsp;&nbsp;&nbsp; ${item.email.toLowerCase()}`;
+          });
 
-        this.poDialog.alert({
-          ok: () => (this.loading = false),
-          title: 'Cadastro de Senha',
-          message: this.mensagem
-        });
+          this.poDialog.alert({
+            ok: () => (this.loading = false),
+            title: 'Cadastro de Senha',
+            message: this.mensagem
+          });
+        }
       },
         (error: any) => {
-          if (error.message) {
-            this.msg.error(error.message);
+          // Priorizar estrutura fault.faultstring conforme documentação da API
+          const errorMessage = error?.error?.fault?.faultstring || 
+                               error?.error?.message || 
+                               error?.error?.errorMessage || 
+                               error?.message || 
+                               'Erro ao cadastrar senha';
+          
+          if (errorMessage) {
+            this.msg.error(errorMessage);
             this.msg.setDefaultDuration(3);
           }
           this.loading = false;

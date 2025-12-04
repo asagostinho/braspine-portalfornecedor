@@ -1,20 +1,6 @@
 <po-page-default>
   <!-- Rotas protegidas -->
   <router-outlet></router-outlet>
-
-  <!-- Fallback: Exibição via *ngIf quando não há rota ativa -->
-  <div *ngIf="router.url === '/' || router.url === ''">
-    <div *ngIf="isLogged">
-      <po-toolbar [p-title]="title"></po-toolbar>
-      <app-titulos
-        [cnpj]="cnpj"
-        [maxperiodo]="maxperiodo"
-        [fornecedornome]="fornecedornome">
-      </app-titulos>
-    </div>
-
-    <app-login *ngIf="!isLogged" (loginSuccess)="onLoginSuccess($event)"></app-login>
-  </div>
 </po-page-default>
 
 
