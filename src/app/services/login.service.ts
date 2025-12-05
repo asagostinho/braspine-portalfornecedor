@@ -52,33 +52,38 @@ export class LoginService {
           let errorMessage = 'Erro na comunicação com o servidor.';
 
           // Priorizar estrutura fault.faultstring conforme documentação da API
+          let rawErrorMessage = 'Erro na comunicação com o servidor.';
+          
           if (error?.error?.fault?.faultstring) {
-              errorMessage = error.error.fault.faultstring;
+              rawErrorMessage = error.error.fault.faultstring;
           }
           else if (error && error.error && typeof error.error === 'object' && (error.error.message || error.error.errorMessage)) {
-              errorMessage = error.error.message || error.error.errorMessage;
+              rawErrorMessage = error.error.message || error.error.errorMessage;
           }
           else if (error && error.error && typeof error.error === 'string') {
               try {
                   const parsedError = JSON.parse(error.error);
-                  errorMessage = parsedError.fault?.faultstring || parsedError.message || parsedError.errorMessage || errorMessage;
+                  rawErrorMessage = parsedError.fault?.faultstring || parsedError.message || parsedError.errorMessage || rawErrorMessage;
               } catch (parseError) {
-                  errorMessage = error.message || errorMessage;
+                  rawErrorMessage = error.message || rawErrorMessage;
               }
           }
           else if (error && typeof error.responseText === 'string') {
               try {
                   const parsedError = JSON.parse(error.responseText);
-                  errorMessage = parsedError.fault?.faultstring || parsedError.message || parsedError.errorMessage || errorMessage;
+                  rawErrorMessage = parsedError.fault?.faultstring || parsedError.message || parsedError.errorMessage || rawErrorMessage;
               } catch (parseError) {
-                  errorMessage = error.message || errorMessage;
+                  rawErrorMessage = error.message || rawErrorMessage;
               }
           }
           else if (error && error.message) {
-              errorMessage = error.message;
+              rawErrorMessage = error.message;
           }
 
-          return throwError(() => new Error(errorMessage));
+          // Corrigir encoding e tornar mensagem mais amigável
+          const friendlyMessage = SecurityUtil.getFriendlyErrorMessage(rawErrorMessage);
+
+          return throwError(() => new Error(friendlyMessage));
         })
       );
   }
@@ -97,10 +102,11 @@ export class LoginService {
     return this.http.post(`${this.domain}${this.endpointcadastro}`, body, { headers })
       .pipe(
         catchError(error => {
-          const errorMessage = error?.error?.fault?.faultstring ||
-                               error?.error?.errorMessage ||
-                               'Erro ao cadastrar';
-          return throwError(() => new Error(errorMessage));
+          const rawErrorMessage = error?.error?.fault?.faultstring || 
+                                  error?.error?.errorMessage || 
+                                  'Erro ao cadastrar';
+          const friendlyMessage = SecurityUtil.getFriendlyErrorMessage(rawErrorMessage);
+          return throwError(() => new Error(friendlyMessage));
         })
       );
   }

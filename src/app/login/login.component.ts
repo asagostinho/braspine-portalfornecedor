@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, AfterViewInit, ElementRef, Renderer2 } from '@angular/core';
+import { Component, EventEmitter, Output, AfterViewInit, ElementRef, Renderer2, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { LoginService } from '../services/login.service';
 import { PoLanguage, PoNotificationService, PoDialogService } from '@po-ui/ng-components';
@@ -7,7 +7,9 @@ import { first } from 'rxjs';
 import { Email } from '../interface/email';
 import { ConfigService } from '../services/config.service';
 import { AuthenticationService } from '../services/authentication.service';
+import { SecurityUtil } from '../utils/security.util';
 import { environment } from '../../environments/environment';
+import { RecaptchaComponent } from 'ng-recaptcha';
 
 export interface LoginSuccessData {
   cnpj: string;
@@ -24,11 +26,13 @@ export interface LoginSuccessData {
 export class LoginComponent implements AfterViewInit {
 
   @Output() loginSuccess = new EventEmitter<LoginSuccessData>();
+  @ViewChild('recaptcha', { static: false }) recaptcha: RecaptchaComponent | undefined;
 
   environment = environment;
 
   linguageList: Array<PoLanguage> = [];
   loading: boolean = false;
+  isHideLoading: boolean = true; // Para o overlay de loading
   loginErrors: Array<string> = [];
   passwordErrors: Array<string> = [];
   customLiterals: PoPageLoginLiterals = {
@@ -57,6 +61,7 @@ export class LoginComponent implements AfterViewInit {
     private renderer: Renderer2,
     private el: ElementRef
   ) {
+
     this.configService.getConfig().subscribe((data: any) => {
       if (data.userapi) {
         this.config = data.userapi;
@@ -87,8 +92,44 @@ export class LoginComponent implements AfterViewInit {
       this.login(formData, this.recaptchaToken);
     } else {
       // Caso contrário, aguarda o usuário resolver o reCAPTCHA
-      this.msg.warning('Por favor, complete a verificação reCAPTCHA antes de fazer login.');
+      this.msg.warning({ message: 'Por favor, complete a verificação reCAPTCHA antes de fazer login.', duration: 5000 });
+
+      // Resetar reCAPTCHA se já estava marcado e destacar visualmente
+      this.resetAndHighlightRecaptcha();
     }
+  }
+
+  /**
+   * Reseta o reCAPTCHA e faz scroll para destacá-lo
+   */
+  resetAndHighlightRecaptcha(): void {
+    // Resetar o token
+    this.recaptchaToken = '';
+
+    // Resetar o componente reCAPTCHA se existir
+    if (this.recaptcha) {
+      try {
+        // Reseta o reCAPTCHA usando o método reset() do componente
+        this.recaptcha.reset();
+      } catch (e) {
+        // Se não conseguir resetar programaticamente, apenas limpa o token
+        console.log('Não foi possível resetar o reCAPTCHA programaticamente', e);
+      }
+    }
+
+    // Fazer scroll suave para o reCAPTCHA após um pequeno delay
+    setTimeout(() => {
+      const recaptchaElement = document.querySelector('.recaptcha-container');
+      if (recaptchaElement) {
+        recaptchaElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Adicionar uma animação de destaque
+        recaptchaElement.classList.add('highlight-recaptcha');
+        setTimeout(() => {
+          recaptchaElement.classList.remove('highlight-recaptcha');
+        }, 2000);
+      }
+    }, 100);
   }
 
   onRecaptchaResolved(captchaResponse: string | null): void {
@@ -108,11 +149,12 @@ export class LoginComponent implements AfterViewInit {
 
   onRecaptchaError(error: any): void {
     this.recaptchaToken = '';
-    this.msg.error('Erro ao carregar reCAPTCHA. Por favor, recarregue a página.');
+    this.msg.error({ message: 'Erro ao carregar reCAPTCHA. Por favor, recarregue a página.', duration: 5000 });
   }
 
   async login(formData: any, recaptchaToken: string) {
     this.loading = true;
+    this.isHideLoading = false; // Mostrar overlay de loading
 
     this.authenticationService.token(this.config.login, this.config.password).pipe(first())
       .subscribe(
@@ -123,6 +165,11 @@ export class LoginComponent implements AfterViewInit {
               localStorage.setItem('fornecedor_jwt', response.token);
             }
 
+            // Armazenar CNPJ raiz para uso nas requisições
+            if (response.cnpjraiz) {
+              localStorage.setItem('fornecedor_cnpjraiz', response.cnpjraiz);
+            }
+
             const loginData: LoginSuccessData = {
               cnpj: response.cnpjraiz,
               fornecedornome: response.fornecedornome,
@@ -130,8 +177,9 @@ export class LoginComponent implements AfterViewInit {
             };
 
             this.loading = false;
+            this.isHideLoading = true; // Esconder overlay de loading
             this.recaptchaToken = ''; // Limpa token após login bem-sucedido
-            this.msg.success('Login efetuado com sucesso!');
+            this.msg.success({ message: 'Login efetuado com sucesso!', duration: 5000 });
 
             // Emite evento de sucesso para o componente pai (se necessário)
             this.loginSuccess.emit(loginData);
@@ -141,30 +189,29 @@ export class LoginComponent implements AfterViewInit {
           },
             error => {
               // Priorizar estrutura fault.faultstring conforme documentação da API
-              let errorMessage = error?.error?.fault?.faultstring || 
-                                 error?.error?.message || 
-                                 error?.error?.errorMessage || 
-                                 error?.message || 
-                                 'Erro desconhecido ao tentar fazer login.';
+              const rawErrorMessage = error?.error?.fault?.faultstring ||
+                                      error?.error?.message ||
+                                      error?.error?.errorMessage ||
+                                      error?.message ||
+                                      'Erro desconhecido ao tentar fazer login.';
 
-              // Tenta corrigir problema de encoding (UTF-8 exibido como Latin-1)
-              try {
-                let correctedMessage = decodeURIComponent(escape(errorMessage));
-                errorMessage = correctedMessage;
-              } catch (e) {
-                // Erro ao corrigir encoding - usar mensagem original
-              }
+              // Corrigir encoding e tornar mensagem mais amigável
+              const friendlyMessage = SecurityUtil.getFriendlyErrorMessage(rawErrorMessage);
 
-              this.msg.error({ message: errorMessage, duration: 5000 });
+              // Erros de login são críticos - usar error (não fecha automaticamente)
+              this.msg.error({ message: friendlyMessage });
               this.loading = false;
+              this.isHideLoading = true; // Esconder overlay de loading
               this.recaptchaToken = ''; // Limpa token em caso de erro para forçar novo reCAPTCHA
             });
         },
         (error: any) => {
           const errorMessage = error?.message || 'Erro de autenticação. Verifique suas credenciais ou tente novamente.';
-          this.msg.error(errorMessage);
-          this.msg.setDefaultDuration(3);
+          const friendlyMessage = SecurityUtil.getFriendlyErrorMessage(errorMessage);
+          // Erros de autenticação são críticos - usar error (não fecha automaticamente)
+          this.msg.error({ message: friendlyMessage });
           this.loading = false;
+          this.isHideLoading = true; // Esconder overlay de loading
           this.recaptchaToken = ''; // Limpa token em caso de erro
         }
       );
@@ -172,13 +219,17 @@ export class LoginComponent implements AfterViewInit {
 
   public cadastrarSenha() {
     this.loading = true;
+    this.isHideLoading = false; // Mostrar overlay de loading
 
     if (this.raizcnpj.trim()) {
       this.loginService.cadastrar(this.raizcnpj).subscribe((response: any) => {
         // Nova estrutura da API: retorna mensagem única com e-mails mascarados
         if (response.mensagem) {
           this.poDialog.alert({
-            ok: () => (this.loading = false),
+            ok: () => {
+              this.loading = false;
+              this.isHideLoading = true; // Esconder overlay de loading
+            },
             title: 'Cadastro de Senha',
             message: response.mensagem
           });
@@ -196,7 +247,10 @@ export class LoginComponent implements AfterViewInit {
           });
 
           this.poDialog.alert({
-            ok: () => (this.loading = false),
+            ok: () => {
+              this.loading = false;
+              this.isHideLoading = true; // Esconder overlay de loading
+            },
             title: 'Cadastro de Senha',
             message: this.mensagem
           });
@@ -204,22 +258,27 @@ export class LoginComponent implements AfterViewInit {
       },
         (error: any) => {
           // Priorizar estrutura fault.faultstring conforme documentação da API
-          const errorMessage = error?.error?.fault?.faultstring || 
-                               error?.error?.message || 
-                               error?.error?.errorMessage || 
-                               error?.message || 
-                               'Erro ao cadastrar senha';
-          
-          if (errorMessage) {
-            this.msg.error(errorMessage);
-            this.msg.setDefaultDuration(3);
+          const rawErrorMessage = error?.error?.fault?.faultstring ||
+                                  error?.error?.message ||
+                                  error?.error?.errorMessage ||
+                                  error?.message ||
+                                  'Erro ao cadastrar senha';
+
+          // Corrigir encoding e tornar mensagem mais amigável
+          const friendlyMessage = SecurityUtil.getFriendlyErrorMessage(rawErrorMessage);
+
+          if (friendlyMessage) {
+            // Erros de cadastro podem usar warning (fecha automaticamente)
+            this.msg.warning({ message: friendlyMessage, duration: 5000 });
           }
           this.loading = false;
+          this.isHideLoading = true; // Esconder overlay de loading
         }
       );
     } else {
-      this.msg.error("Obrigatório informar a raiz do CNPJ ( somente os 8 primeiros números ) !");
+      this.msg.warning({ message: "Obrigatório informar a raiz do CNPJ ( somente os 8 primeiros números ) !", duration: 5000 });
       this.loading = false;
+      this.isHideLoading = true; // Esconder overlay de loading
     }
   }
 

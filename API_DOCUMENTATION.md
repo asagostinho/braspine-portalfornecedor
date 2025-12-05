@@ -10,6 +10,8 @@
 6. [Códigos de Status HTTP](#códigos-de-status-http)
 7. [Tratamento de Erros](#tratamento-de-erros)
 8. [Exemplos de Implementação](#exemplos-de-implementação)
+9. [Configuração do Servidor](#configuração-do-servidor)
+10. [Notas Importantes](#notas-importantes)
 
 ---
 
@@ -30,20 +32,21 @@ A API utiliza autenticação JWT stateless. O token é gerado no endpoint de log
 ### Características do Token JWT
 
 - **Algoritmo:** SHA512
-- **Expiração:** 1 hora (3600 segundos)
+- **Chave Secreta:** Configurada no parâmetro `BPJWTKEY` (deve ser um hash SHA256)
+- **Expiração:** 1 hora (3600 segundos após emissão)
 - **Claims incluídos:**
-  - `cnpjraiz`: Raiz do CNPJ do fornecedor
+  - `cCNPJraiz`: Raiz do CNPJ do fornecedor (8 dígitos)
   - `codigo`: Código do fornecedor no sistema
-  - `fornecedornome`: Nome do fornecedor
-  - `periodomax`: Período máximo permitido para consulta
-  - `iat`: Data/hora de emissão (timestamp)
-  - `exp`: Data/hora de expiração (timestamp)
+  - `iat`: Data/hora de emissão (timestamp em segundos usando `Seconds()`)
+  - `exp`: Data/hora de expiração (timestamp em segundos, calculado como `iat + 3600`)
 
 ### Armazenamento do Token
 
 O front-end deve armazenar o token JWT após o login bem-sucedido. Recomenda-se usar:
 - `localStorage` para persistência entre sessões
 - `sessionStorage` para sessão única
+
+**⚠️ Importante:** O token JWT é **stateless** - não é armazenado no servidor. A validação é feita a cada requisição através da verificação da assinatura usando a chave secreta `BPJWTKEY`. Se o token expirar (após 1 hora), o usuário precisará fazer login novamente.
 
 ---
 
@@ -120,7 +123,7 @@ Authorization: Bearer <token_protheus>
   "fornecedornome": "FORNECEDOR EXEMPLO LTDA",
   "codigo": "000001",
   "periodomax": "12",
-  "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJjbnBqcmFpeiI6IjU1NDMxMzE1IiwiY29kaWdvIjoiMDAwMDAxIiwicGVyaW9kb21heCI6IjEyIn0..."
+  "token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJjQ05QanJhaXoiOiI1NTQzMTMxNSIsImNvZGlnbyI6IjAwMDAwMSIsImlhdCI6MTczMzQ1NjAwMCwiZXhwIjoxNzMzNDU5NjAwfQ..."
 }
 ```
 
@@ -275,11 +278,11 @@ X-Custon-Token: Bearer <jwt_fornecedor>
 *Obrigatório apenas se não estiver no token JWT
 
 **Validações:**
-- Token JWT deve ser válido e não expirado
-- Se `cCNPJraiz` for informado, deve ser igual ao CNPJ do token JWT
+- Token JWT deve ser válido e não expirado (validado via `valJwt()`)
+- `cCNPJraiz` é obrigatório e deve ser igual ao CNPJ do token JWT (`cCNPJraiz` no payload)
 - `cDataIni` e `cDataFim` são obrigatórios
 - Data inicial deve ser menor ou igual à data final
-- Período entre datas não deve exceder o `periodomax` do token
+- Período entre datas não deve exceder o `periodomax` configurado no parâmetro `BP_PFPRMAX`
 
 #### Response
 
@@ -348,15 +351,15 @@ X-Custon-Token: Bearer <jwt_fornecedor>
 ```
 
 **Possíveis Erros:**
-- `"X-Custon-Token não informado"`
-- `"Formato de X-Custon-Token inválido. Utilize Bearer <token>."`
-- `"Token JWT do fornecedor não informado"`
-- `"Token JWT inválido ou corrompido"`
-- `"Token JWT do fornecedor expirado"`
-- `"CNPJ raiz informado diferente do CNPJ do token"`
-- `"Obrigatório informar a data de emissão inicial e final"`
-- `"Raiz do CNPJ do fornecedor não informado"`
-- `"tenantId não informado"`
+- `"X-Custon-Token não informado"` - Header `X-Custon-Token` ausente
+- `"Formato de X-Custon-Token inválido. Utilize Bearer <token>."` - Formato incorreto do header
+- `"Token JWT do fornecedor não informado"` - Token vazio após o prefixo "Bearer"
+- `"Token JWT inválido ou corrompido"` - Assinatura inválida ou token malformado
+- `"Token JWT do fornecedor expirado"` - Token expirado (claim `exp` < timestamp atual)
+- `"CNPJ raiz informado diferente do CNPJ do token"` - CNPJ do parâmetro não corresponde ao do token
+- `"CNPJ raiz não informado"` - Parâmetro `cCNPJraiz` obrigatório ausente
+- `"Obrigatório informar a data de emissão inicial e final"` - Parâmetros `cDataIni` ou `cDataFim` ausentes
+- `"tenantId não informado"` - Header `tenantid` ausente
 
 ---
 
@@ -919,18 +922,40 @@ axios.interceptors.response.use(
 
 ---
 
+## ⚙️ Configuração do Servidor
+
+### Parâmetros Necessários
+
+A API requer os seguintes parâmetros configurados no Protheus:
+
+| Parâmetro | Descrição | Tipo | Exemplo |
+|-----------|-----------|------|---------|
+| `BPJWTKEY` | Chave secreta para assinatura e validação dos tokens JWT. Deve ser um hash SHA256. | String | `265e01e5eca16695e5247b2d4b91f8bace5b554dc04dd40c0e99d605ec65c19c` |
+| `BP_PFPRMAX` | Período máximo (em meses) permitido para consulta de títulos por data de emissão. | String | `12` (12 meses) |
+| `MV_COMEXTE` | Configuração para comunicação externa (usado no envio de e-mails). | String | Conforme ambiente |
+| `BP_TPLTFOR` | Template de e-mail para envio de senha aos fornecedores. | String | Conforme ambiente |
+
+**⚠️ Importante:**
+- O parâmetro `BPJWTKEY` é crítico para a segurança. Deve ser mantido em segredo e nunca exposto.
+- Se `BPJWTKEY` não estiver configurado, será usado um valor padrão (não recomendado para produção).
+- O valor padrão de `BPJWTKEY` é apenas para desenvolvimento/testes.
+
+---
+
 ## 📝 Notas Importantes
 
 ### Segurança
 
-1. **Nunca armazene a senha em texto plano** - sempre use hash SHA256
-2. **Valide o token JWT antes de cada requisição** - verifique expiração
+1. **Nunca armazene a senha em texto plano** - sempre use hash SHA256 em maiúsculo
+2. **Valide o token JWT antes de cada requisição** - verifique expiração e assinatura
 3. **Use HTTPS** em produção para proteger os dados em trânsito
 4. **Implemente rate limiting** no front-end para evitar requisições excessivas
-5. **E-mails mascarados** - O endpoint `/cadastro` retorna e-mails mascarados por segurança:
+5. **Configure o parâmetro BPJWTKEY** com uma chave secreta forte e única para produção
+6. **E-mails mascarados** - O endpoint `/cadastro` retorna e-mails mascarados por segurança:
    - Apenas os últimos 3 caracteres do nome do e-mail são visíveis
    - O domínio completo permanece visível para identificação
    - Exemplo: `asagostinho@gmail.com` → `********nho@gmail.com`
+7. **Token JWT stateless** - O token não é armazenado no servidor, apenas validado a cada requisição
 
 ### Performance
 
@@ -941,10 +966,18 @@ axios.interceptors.response.use(
 ### Validações no Front-end
 
 Antes de enviar requisições, valide:
-- Formato do CNPJ raiz (8 dígitos)
+- Formato do CNPJ raiz (8 dígitos numéricos)
 - Formato das datas (YYYYMMDD)
 - Data inicial <= Data final
-- Período não excede o `periodomax` do token
+- Período entre datas não excede o `periodomax` retornado no login (configurado em `BP_PFPRMAX`)
+- Token JWT não está expirado (verificar claim `exp` antes de enviar requisições)
+
+### Tratamento de Expiração do Token
+
+O token JWT expira após 1 hora. Implemente no front-end:
+- Verificação periódica da expiração do token
+- Redirecionamento automático para login quando expirado
+- Renovação proativa do token antes da expiração (opcional)
 
 ---
 
@@ -952,10 +985,14 @@ Antes de enviar requisições, valide:
 
 Para dúvidas ou problemas com a API, entre em contato com o departamento de TI.
 
-**Versão da Documentação:** 1.1  
-**Última Atualização:** 04/12/2025
+**Versão da Documentação:** 1.2  
+**Última Atualização:** 05/12/2025
 
 **Changelog:**
+- v1.2 (05/12/2025): 
+  - Corrigida documentação dos claims do JWT (usando `cCNPJraiz` conforme implementação)
+  - Atualizadas validações do endpoint `/docforne` com detalhes mais precisos
+  - Melhorada descrição dos possíveis erros com explicações mais detalhadas
 - v1.1 (04/12/2025): Atualizado endpoint `/cadastro` para retornar mensagem única com e-mails mascarados por segurança
 - v1.0 (15/01/2025): Versão inicial da documentação
 

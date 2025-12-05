@@ -1,4 +1,8 @@
 <div class="login-container">
+  <div class="sample-container">
+    <po-loading-overlay [hidden]="isHideLoading"></po-loading-overlay>
+  </div>
+  
   <po-page-login
     (p-login-submit)="onLoginSubmit($event)"
     p-product-name="Consulta Documentos de Fornecedor"
@@ -17,6 +21,7 @@
 
   <div class="recaptcha-container">
     <re-captcha
+      #recaptcha
       (resolved)="onRecaptchaResolved($event)"
       (error)="onRecaptchaError($event)"
       [siteKey]="environment.recaptchaSiteKey"

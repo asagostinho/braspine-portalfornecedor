@@ -101,5 +101,86 @@ export class SecurityUtil {
     return CryptoJS.SHA256(value).toString();
   }
 
+  /**
+   * Corrige problemas de encoding (UTF-8 interpretado como Latin-1)
+   * Converte caracteres malformados como "nÃ£o" para "não"
+   */
+  static fixEncoding(text: string): string {
+    if (!text) return text;
+
+    try {
+      // Tenta corrigir encoding UTF-8 mal interpretado como Latin-1
+      return decodeURIComponent(escape(text));
+    } catch (e) {
+      // Se falhar, retorna o texto original
+      return text;
+    }
+  }
+
+  /**
+   * Determina se um erro é crítico e deve usar notificação de erro (que não fecha automaticamente)
+   * ou se pode usar warning (que fecha automaticamente)
+   */
+  static isCriticalError(errorMessage: string): boolean {
+    if (!errorMessage) return false;
+
+    const errorLower = errorMessage.toLowerCase();
+    const criticalKeywords = [
+      'token inválido',
+      'token expirado',
+      'sessão expirada',
+      'autenticação',
+      'login',
+      'não autorizado',
+      'unauthorized'
+    ];
+
+    return criticalKeywords.some(keyword => errorLower.includes(keyword));
+  }
+
+  /**
+   * Torna mensagens de erro mais amigáveis ao usuário
+   * Traduz mensagens técnicas em mensagens mais claras
+   * Se a mensagem não estiver no mapeamento, retorna mensagem genérica
+   */
+  static getFriendlyErrorMessage(errorMessage: string): string {
+    if (!errorMessage) {
+      return 'Ocorreu um erro inesperado. Por favor, entre em contato com o suporte.';
+    }
+
+    // Corrige encoding primeiro
+    let message = this.fixEncoding(errorMessage);
+
+    // Mapeamento de mensagens técnicas para mensagens amigáveis
+    const friendlyMessages: { [key: string]: string } = {
+      'cnpj raiz não informado': 'Por favor, informe o CNPJ raiz para realizar a consulta.',
+      'cnpj raiz nÃ£o informado': 'Por favor, informe o CNPJ raiz para realizar a consulta.',
+      'cnpj raiz não encontrado': 'CNPJ raiz não encontrado. Verifique se o CNPJ está correto.',
+      'senha ou cnpj raiz informados inválidos': 'CNPJ ou senha inválidos. Verifique suas credenciais e tente novamente.',
+      'fornecedor não encontrado': 'Fornecedor não encontrado. Verifique a raiz do CNPJ e tente novamente.',
+      'fornecedor sem senha': 'Fornecedor sem senha de acesso cadastrada. Clique em "Esqueceu sua senha" para gerar uma nova senha.',
+      'token jwt do fornecedor expirado': 'Sua sessão expirou. Por favor, faça login novamente.',
+      'token jwt inválido ou corrompido': 'Sessão inválida. Por favor, faça login novamente.',
+      'x-custon-token não informado': 'Erro de autenticação. Por favor, faça login novamente.',
+      'obrigatório informar a data de emissão inicial e final': 'Por favor, informe a data inicial e a data final para realizar a consulta.',
+      'data inicial deve ser menor ou igual à data final': 'A data inicial deve ser menor ou igual à data final.',
+      'período informado excede ao período máximo': 'O período informado excede o período máximo permitido.',
+      'tenantid não informado': 'Erro de configuração. Entre em contato com o suporte.',
+      'erro ao deserializar json': 'Erro ao processar a requisição. Por favor, tente novamente.',
+      'erro na comunicação com o servidor': 'Erro na comunicação com o servidor. Verifique sua conexão e tente novamente.'
+    };
+
+    // Busca mensagem amigável (case insensitive)
+    const messageLower = message.toLowerCase();
+    for (const [key, friendly] of Object.entries(friendlyMessages)) {
+      if (messageLower.includes(key.toLowerCase())) {
+        return friendly;
+      }
+    }
+
+    // Se não encontrar mapeamento, retorna mensagem genérica
+    return 'Ocorreu um erro inesperado. Por favor, entre em contato com o suporte.';
+  }
+
 }
 

@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { PoTableColumn } from '@po-ui/ng-components';
 import { Observable, catchError, pipe, throwError } from 'rxjs';
 import { environment } from 'src/environments/environment';
+import { SecurityUtil } from '../utils/security.util';
 
 @Injectable({
   providedIn: 'root'
@@ -47,11 +48,15 @@ export class TitulosService {
 
     return this.http.get<any>(`${this.domain}${this.endpoint}`, httpOptions).pipe(
         catchError(error => {
-        // Return an observable with a user-facing error message.
-        const errorMessage = error?.error?.fault?.faultstring || 
-                             error?.error?.errorMessage || 
-                             'Erro ao buscar títulos';
-        return throwError(() => new Error(errorMessage));
+        // Extrair mensagem de erro
+        const rawErrorMessage = error?.error?.fault?.faultstring ||
+                               error?.error?.errorMessage ||
+                               'Erro ao buscar títulos';
+
+        // Corrigir encoding e tornar mensagem mais amigável
+        const friendlyMessage = SecurityUtil.getFriendlyErrorMessage(rawErrorMessage);
+
+        return throwError(() => new Error(friendlyMessage));
       })
     );
   }

@@ -1,6 +1,7 @@
-import { Component, Input, ViewChild } from '@angular/core';
+import { Component, Input, OnInit, ViewChild } from '@angular/core';
 import { PoButtonGroupItem, PoDatepickerComponent, PoNotificationService, PoSelectOption, PoTableColumn } from '@po-ui/ng-components';
 import { TitulosService } from '../services/titulos.service';
+import { SecurityUtil } from '../utils/security.util';
 import * as XLS from 'xlsx';
 import * as pdfMake from "pdfmake/build/pdfmake";
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
@@ -13,7 +14,7 @@ import * as pdfFonts from 'pdfmake/build/vfs_fonts';
   templateUrl: './titulos.component.html',
   styleUrls: ['./titulos.component.css'],
   providers: [PoNotificationService]})
-export class TitulosComponent {
+export class TitulosComponent implements OnInit {
   @Input() cnpj: string = '';
   @Input() maxperiodo: string = '';
   @Input() fornecedornome: string = '';
@@ -52,6 +53,46 @@ export class TitulosComponent {
 
   constructor(private msg: PoNotificationService, private service: TitulosService) {}
 
+  ngOnInit(): void {
+    // Buscar CNPJ raiz armazenado no login
+    const cnpjArmazenado = localStorage.getItem('fornecedor_cnpjraiz');
+    if (cnpjArmazenado && !this.cnpj) {
+      this.cnpj = cnpjArmazenado;
+    }
+
+    // Se ainda não tiver CNPJ, tentar extrair do token JWT
+    if (!this.cnpj) {
+      const token = localStorage.getItem('fornecedor_jwt');
+      if (token) {
+        try {
+          const payload = this.decodeToken(token);
+          if (payload.cCNPJraiz) {
+            this.cnpj = payload.cCNPJraiz;
+            localStorage.setItem('fornecedor_cnpjraiz', this.cnpj);
+          }
+        } catch (e) {
+          console.error('Erro ao decodificar token:', e);
+        }
+      }
+    }
+  }
+
+  /**
+   * Decodifica o token JWT para extrair o payload
+   */
+  private decodeToken(token: string): any {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      throw new Error('Erro ao decodificar token JWT');
+    }
+  }
+
 
 
   public onClick(){
@@ -63,10 +104,10 @@ export class TitulosComponent {
     this.lok = true;
 
     if (!this.dataIni ){
-      this.msg.error('Abrigatório informar data inicial e data final');
+      this.msg.warning({ message: 'Abrigatório informar data inicial e data final', duration: 5000 });
       this.lok = false;
     }else if(!this.dataFim){
-      this.msg.error('Abrigatório informar data inicial e data final');
+      this.msg.warning({ message: 'Abrigatório informar data inicial e data final', duration: 5000 });
       this.lok = false;
     }else{
 
@@ -75,7 +116,7 @@ export class TitulosComponent {
 
         if (dataI.getTime() > dataF.getTime()) {
 
-          this.msg.error('Data inicial deve ser menor ou igual a data final');
+          this.msg.warning({ message: 'Data inicial deve ser menor ou igual a data final', duration: 5000 });
           this.lok = false;
 
 
@@ -85,7 +126,7 @@ export class TitulosComponent {
           periodo = periodo / (1000 * 60 * 60 * 24)  //converte milesegundos em dias
 
           if ( periodo > maxdias){
-            this.msg.error(`O Periodo informado execede ao periodo maximo de ${this.maxperiodo.trim()} meses`);
+            this.msg.warning({ message: `O Periodo informado execede ao periodo maximo de ${this.maxperiodo.trim()} meses`, duration: 5000 });
             this.lok = false;
           }
         }
@@ -94,11 +135,21 @@ export class TitulosComponent {
 
     if (this.lok ) {
 
+    // Garantir que o CNPJ está preenchido
+    const cnpjParaEnviar = this.cnpj || localStorage.getItem('fornecedor_cnpjraiz') || '';
+
+    if (!cnpjParaEnviar) {
+      // Erro crítico de autenticação - usar error (não fecha automaticamente)
+      this.msg.error({ message: 'CNPJ raiz não encontrado. Por favor, faça login novamente.' });
+      this.isHideLoading = true;
+      return;
+    }
+
     this.isHideLoading = false;
     var dataStrI = this.dataIni.replace(/-/g,"");
     var dataStrF = this.dataFim.replace(/-/g,"");
 
-    this.service.buscarTitulo( this.cnpj, this.empresa, this.situacao, dataStrI , dataStrF).subscribe(
+    this.service.buscarTitulo( cnpjParaEnviar, this.empresa, this.situacao, dataStrI , dataStrF).subscribe(
         (response:  any) => {
           // Processar a resposta do Webservice\
           this.itens = response.titulos;
@@ -112,7 +163,15 @@ export class TitulosComponent {
         },
         (error: any) => {
           if (error.message){
-            this.msg.error(error.message)
+            // Mensagem já vem amigável do serviço, mas garante correção de encoding
+            const friendlyMessage = SecurityUtil.getFriendlyErrorMessage(error.message);
+            // PO-UI ignora duration em erros, então usamos warning para erros não críticos
+            // que precisam fechar automaticamente
+            if (SecurityUtil.isCriticalError(error.message)) {
+              this.msg.error({ message: friendlyMessage });
+            } else {
+              this.msg.warning({ message: friendlyMessage, duration: 5000 });
+            }
           }
           this.itens = [];
           this.data = [];
@@ -185,9 +244,9 @@ export class TitulosComponent {
       const workbook = XLS.utils.book_new();
       XLS.utils.book_append_sheet(workbook, worksheet, 'Documentos');
       XLS.writeFile(workbook, 'doc_fornecedor.xlsx');
-      this.msg.success("Download realizado com sucesso!")
+      this.msg.success({ message: "Download realizado com sucesso!", duration: 5000 })
     }else{
-      this.msg.error("Não existe dados para exportar!")
+      this.msg.warning({ message: "Não existe dados para exportar!", duration: 5000 });
     }
   }
 
@@ -280,7 +339,7 @@ export class TitulosComponent {
       pdfMake.createPdf(docDefinition).download('userdata.pdf');
 
     }else{
-      this.msg.error("Não existe dados para exportar!")
+      this.msg.warning({ message: "Não existe dados para exportar!", duration: 5000 });
     }
 
    }
